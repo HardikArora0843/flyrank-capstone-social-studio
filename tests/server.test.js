@@ -946,6 +946,89 @@ describe("Variant management", () => {
       error: "Schedule not found"
     });
   });
+  it("returns publish attempts for a schedule", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Publish Attempt History"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Attempt history content",
+        status: "APPROVED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(
+          Date.now() + 60 * 60 * 1000
+        ).toISOString(),
+        idempotencyKey: "attempt-history-001"
+      });
+
+    await prisma.publishAttempt.createMany({
+      data: [
+        {
+          scheduleId: schedule.body.id,
+          variantId: variant.body.id,
+          platform: "x",
+          idempotencyKey: "attempt-history-001",
+          status: "FAILED",
+          attemptNumber: 1,
+          error: "Temporary failure"
+        },
+        {
+          scheduleId: schedule.body.id,
+          variantId: variant.body.id,
+          platform: "x",
+          idempotencyKey: "attempt-history-001",
+          status: "SUCCESS",
+          attemptNumber: 2,
+          externalMessageId: "mock-x-attempt-history-001",
+          publishedAt: new Date()
+        }
+      ]
+    });
+
+    const response = await request(app).get(
+      `/api/schedules/${schedule.body.id}/attempts`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(response.body[0].attemptNumber).toBe(1);
+    expect(response.body[0].status).toBe("FAILED");
+    expect(response.body[1].attemptNumber).toBe(2);
+    expect(response.body[1].status).toBe("SUCCESS");
+  });
+
+  it("returns 404 for publish attempts of a missing schedule", async () => {
+    const response = await request(app).get(
+      "/api/schedules/non-existent-schedule/attempts"
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "Schedule not found"
+    });
+  });
 });
 
 describe("Schedule management", () => {
@@ -1318,6 +1401,7 @@ describe("Schedule management", () => {
         "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED, CANCELLED"
     });
   });});
+
 
 
 
