@@ -1,5 +1,6 @@
 import {
   createScheduleService,
+  getSchedulesService,
   getScheduleByIdService
 } from "../services/scheduleService.js";
 
@@ -15,18 +16,42 @@ export const createScheduleController = async (req, res) => {
   }
 
   try {
-    const schedule = await createScheduleService(req.body);
+    const existing = await getSchedulesService();
 
-    return res.status(201).json(schedule);
-  } catch (error) {
-    if (error.code === "P2002") {
+    const duplicate = existing.find(
+      (schedule) =>
+        schedule.idempotencyKey === req.body.idempotencyKey
+    );
+
+    if (duplicate) {
       return res.status(409).json({
         error: "idempotencyKey already exists"
       });
     }
 
+    const schedule = await createScheduleService({
+      variantId: req.body.variantId,
+      scheduledFor: new Date(req.body.scheduledFor),
+      idempotencyKey: req.body.idempotencyKey
+    });
+
+    return res.status(201).json(schedule);
+  } catch (error) {
     return res.status(500).json({
-      error: "Failed to create schedule"
+      error: "Failed to create schedule",
+      details: error.message
+    });
+  }
+};
+
+export const getSchedulesController = async (req, res) => {
+  try {
+    const schedules = await getSchedulesService();
+
+    return res.status(200).json(schedules);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to fetch schedules"
     });
   }
 };

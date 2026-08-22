@@ -14,8 +14,24 @@ export const createSchedule = async ({
     include: {
       variant: {
         include: {
-          platform: true,
-          post: true
+          post: true,
+          platform: true
+        }
+      }
+    }
+  });
+};
+
+export const getSchedules = async () => {
+  return prisma.schedule.findMany({
+    orderBy: {
+      scheduledFor: "asc"
+    },
+    include: {
+      variant: {
+        include: {
+          post: true,
+          platform: true
         }
       }
     }
@@ -30,13 +46,8 @@ export const getScheduleById = async (id) => {
     include: {
       variant: {
         include: {
-          platform: true,
-          post: true
-        }
-      },
-      publishAttempts: {
-        orderBy: {
-          attemptNumber: "asc"
+          post: true,
+          platform: true
         }
       }
     }
@@ -51,16 +62,16 @@ export const getDueSchedules = async (now) => {
         lte: now
       }
     },
+    orderBy: {
+      scheduledFor: "asc"
+    },
     include: {
       variant: {
         include: {
-          platform: true,
-          post: true
+          post: true,
+          platform: true
         }
       }
-    },
-    orderBy: {
-      scheduledFor: "asc"
     }
   });
 };

@@ -766,4 +766,70 @@ describe("Schedule management", () => {
       error: "Schedule not found"
     });
   });
+
+
+  it("returns scheduled jobs ordered by scheduledFor", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Scheduled Posts"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Scheduled content",
+        status: "APPROVED"
+      });
+
+    const later = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const earlier = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: later,
+        idempotencyKey: "schedule-list-later"
+      });
+
+    await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: earlier,
+        idempotencyKey: "schedule-list-earlier"
+      });
+
+    const response = await request(app).get("/api/schedules");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(response.body[0].idempotencyKey).toBe(
+      "schedule-list-earlier"
+    );
+    expect(response.body[1].idempotencyKey).toBe(
+      "schedule-list-later"
+    );
+  });
+
+  it("returns an empty array when no schedules exist", async () => {
+    const response = await request(app).get("/api/schedules");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual([]);
+  });
 });
