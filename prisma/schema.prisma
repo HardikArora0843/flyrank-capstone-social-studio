@@ -31,7 +31,7 @@ model Post {
   id         String    @id @default(cuid())
   sourceType String
   sourceUrl  String?
-  content    String
+  content    String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   variants   Variant[]

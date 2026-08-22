@@ -40,6 +40,22 @@ describe("Post ingestion", () => {
     expect(response.body.id).toBeDefined();
   });
 
+  it("creates a URL post", async () => {
+    const response = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "url",
+        sourceUrl: "https://example.com/blog/test-post"
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.sourceType).toBe("url");
+    expect(response.body.sourceUrl).toBe(
+      "https://example.com/blog/test-post"
+    );
+    expect(response.body.id).toBeDefined();
+  });
+
   it("rejects a Markdown post without content", async () => {
     const response = await request(app)
       .post("/api/posts")
@@ -50,6 +66,34 @@ describe("Post ingestion", () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
       error: "content is required when sourceType is markdown"
+    });
+  });
+
+  it("rejects an invalid URL", async () => {
+    const response = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "url",
+        sourceUrl: "not-a-valid-url"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "sourceUrl must be a valid URL"
+    });
+  });
+
+  it("rejects a non-http URL", async () => {
+    const response = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "url",
+        sourceUrl: "ftp://example.com/file"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "sourceUrl must use http or https"
     });
   });
 

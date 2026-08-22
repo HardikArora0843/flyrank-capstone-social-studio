@@ -25,5 +25,17 @@ export const validateCreatePost = (body) => {
     return "sourceUrl must not be provided when sourceType is markdown";
   }
 
+  if (sourceType === "url") {
+    try {
+      const url = new URL(sourceUrl);
+
+      if (!["http:", "https:"].includes(url.protocol)) {
+        return "sourceUrl must use http or https";
+      }
+    } catch {
+      return "sourceUrl must be a valid URL";
+    }
+  }
+
   return null;
 };
