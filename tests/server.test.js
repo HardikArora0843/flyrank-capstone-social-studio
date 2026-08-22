@@ -21,6 +21,7 @@ describe("Post ingestion", () => {
     await prisma.publishAttempt.deleteMany();
     await prisma.schedule.deleteMany();
     await prisma.variant.deleteMany();
+    await prisma.platform.deleteMany();
     await prisma.post.deleteMany();
   });
 
@@ -283,6 +284,296 @@ describe("Platform configuration", () => {
     expect(response.status).toBe(404);
     expect(response.body).toEqual({
       error: "Platform not found"
+    });
+  });
+});
+
+describe("Variant management", () => {
+  beforeEach(async () => {
+    await prisma.publishAttempt.deleteMany();
+    await prisma.schedule.deleteMany();
+    await prisma.variant.deleteMany();
+    await prisma.platform.deleteMany();
+    await prisma.post.deleteMany();
+  });
+
+  it("creates a variant for a post and platform", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Product Launch\n\nOur new product is now available."
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const response = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Our new product is now available. Learn more today."
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.postId).toBe(post.body.id);
+    expect(response.body.platformId).toBe(platform.body.id);
+    expect(response.body.content).toBe(
+      "Our new product is now available. Learn more today."
+    );
+    expect(response.body.status).toBe("DRAFT");
+    expect(response.body.post.id).toBe(post.body.id);
+    expect(response.body.platform.id).toBe(platform.body.id);
+  });
+
+  it("creates a variant with an explicit status", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Approved Content"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const response = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Approved social post",
+        status: "APPROVED"
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.status).toBe("APPROVED");
+  });
+
+  it("rejects a variant without postId", async () => {
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const response = await request(app)
+      .post("/api/variants")
+      .send({
+        platformId: platform.body.id,
+        content: "Missing post relationship"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "postId is required"
+    });
+  });
+
+  it("rejects a variant without platformId", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Missing Platform"
+      });
+
+    const response = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        content: "Missing platform relationship"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "platformId is required"
+    });
+  });
+
+  it("rejects a variant without content", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Missing Variant Content"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const response = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "content is required"
+    });
+  });
+
+  it("rejects an invalid variant status", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Invalid Status"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const response = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Invalid status test",
+        status: "INVALID"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error:
+        "status must be one of DRAFT, APPROVED, REJECTED, PUBLISHED"
+    });
+  });
+
+  it("retrieves variants for a post", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Multi Platform Post"
+      });
+
+    const linkedin = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const x = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: linkedin.body.id,
+        content: "Professional version"
+      });
+
+    await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: x.body.id,
+        content: "Concise version"
+      });
+
+    const response = await request(app).get(
+      `/api/variants/post/${post.body.id}`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(response.body[0].platform.name).toBe("LinkedIn");
+    expect(response.body[1].platform.name).toBe("X");
+  });
+
+  it("retrieves a variant by id", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Stored Variant"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const created = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Stored variant content"
+      });
+
+    const response = await request(app).get(
+      `/api/variants/${created.body.id}`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(created.body.id);
+    expect(response.body.content).toBe("Stored variant content");
+    expect(response.body.post.id).toBe(post.body.id);
+    expect(response.body.platform.id).toBe(platform.body.id);
+  });
+
+  it("returns 404 for a missing variant", async () => {
+    const response = await request(app).get(
+      "/api/variants/non-existent-variant"
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "Variant not found"
     });
   });
 });
