@@ -1029,6 +1029,146 @@ describe("Variant management", () => {
       error: "Schedule not found"
     });
   });
+  it("returns publishing metrics", async () => {
+    const response = await request(app)
+      .get("/api/metrics/publishing");
+
+    expect(response.status).toBe(200);
+
+    expect(response.body).toEqual({
+      schedules: {
+        total: 0,
+        pending: 0,
+        processing: 0,
+        published: 0,
+        failed: 0,
+        cancelled: 0
+      },
+      publishAttempts: {
+        total: 0,
+        started: 0,
+        successful: 0,
+        failed: 0
+      }
+    });
+  });
+
+  it("returns publishing metrics with current counts", async () => {
+    const post = await prisma.post.create({
+      data: {
+        sourceType: "markdown",
+        content: "# Metrics Test"
+      }
+    });
+
+    const platform = await prisma.platform.create({
+      data: {
+        name: "Metrics X",
+        adapterKey: "metrics-x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      }
+    });
+
+    const variant = await prisma.variant.create({
+      data: {
+        postId: post.id,
+        platformId: platform.id,
+        content: "Metrics content",
+        status: "APPROVED"
+      }
+    });
+
+    const pendingSchedule = await prisma.schedule.create({
+      data: {
+        variantId: variant.id,
+        scheduledFor: new Date(Date.now() + 60 * 60 * 1000),
+        idempotencyKey: "metrics-pending-001"
+      }
+    });
+
+    const publishedSchedule = await prisma.schedule.create({
+      data: {
+        variantId: variant.id,
+        scheduledFor: new Date(Date.now() + 2 * 60 * 60 * 1000),
+        idempotencyKey: "metrics-published-001",
+        status: "PUBLISHED"
+      }
+    });
+
+    const failedSchedule = await prisma.schedule.create({
+      data: {
+        variantId: variant.id,
+        scheduledFor: new Date(Date.now() + 3 * 60 * 60 * 1000),
+        idempotencyKey: "metrics-failed-001",
+        status: "FAILED"
+      }
+    });
+
+    await prisma.schedule.create({
+      data: {
+        variantId: variant.id,
+        scheduledFor: new Date(Date.now() + 4 * 60 * 60 * 1000),
+        idempotencyKey: "metrics-cancelled-001",
+        status: "CANCELLED"
+      }
+    });
+
+    await prisma.publishAttempt.createMany({
+      data: [
+        {
+          scheduleId: pendingSchedule.id,
+          variantId: variant.id,
+          platform: "metrics-x",
+          idempotencyKey: "metrics-pending-001",
+          status: "STARTED",
+          attemptNumber: 1
+        },
+        {
+          scheduleId: publishedSchedule.id,
+          variantId: variant.id,
+          platform: "metrics-x",
+          idempotencyKey: "metrics-published-001",
+          status: "SUCCESS",
+          attemptNumber: 1,
+          externalMessageId: "mock-metrics-001",
+          publishedAt: new Date()
+        },
+        {
+          scheduleId: failedSchedule.id,
+          variantId: variant.id,
+          platform: "metrics-x",
+          idempotencyKey: "metrics-failed-001",
+          status: "FAILED",
+          attemptNumber: 1,
+          error: "Metrics test failure"
+        }
+      ]
+    });
+
+    const response = await request(app)
+      .get("/api/metrics/publishing");
+
+    expect(response.status).toBe(200);
+
+    expect(response.body).toEqual({
+      schedules: {
+        total: 4,
+        pending: 1,
+        processing: 0,
+        published: 1,
+        failed: 1,
+        cancelled: 1
+      },
+      publishAttempts: {
+        total: 3,
+        started: 1,
+        successful: 1,
+        failed: 1
+      }
+    });
+  });
 });
 
 describe("Schedule management", () => {
@@ -1401,6 +1541,7 @@ describe("Schedule management", () => {
         "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED, CANCELLED"
     });
   });});
+
 
 
 
