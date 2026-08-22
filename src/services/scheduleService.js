@@ -25,3 +25,7 @@ export const getDueSchedulesService = async (now) => {
 export const updateScheduleStatusService = async (id, status) => {
   return updateScheduleStatus(id, status);
 };
+
+export const retryScheduleService = async (id) => {
+  return updateScheduleStatus(id, "PENDING");
+};

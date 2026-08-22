@@ -12,6 +12,10 @@ import {
 import prisma from "../config/database.js";
 import { publishContentService } from "../services/publisherService.js";
 
+const MAX_PUBLISH_ATTEMPTS = Number(
+  process.env.MAX_PUBLISH_ATTEMPTS || 3
+);
+
 export const processSchedule = async (schedule) => {
   const existingAttempt = await getPublishAttemptByIdempotencyKey(
     schedule.idempotencyKey
@@ -27,11 +31,23 @@ export const processSchedule = async (schedule) => {
     };
   }
 
-  await updateScheduleStatusService(schedule.id, "PROCESSING");
-
   const attemptNumber = existingAttempt
     ? existingAttempt.attemptNumber + 1
     : 1;
+
+  if (
+    existingAttempt?.status === "FAILED" &&
+    existingAttempt.attemptNumber >= MAX_PUBLISH_ATTEMPTS
+  ) {
+    return {
+      status: "FAILED",
+      scheduleId: schedule.id,
+      error: "Maximum publish attempts reached",
+      attemptNumber: existingAttempt.attemptNumber
+    };
+  }
+
+  await updateScheduleStatusService(schedule.id, "PROCESSING");
 
   const attempt = await createPublishAttempt({
     scheduleId: schedule.id,

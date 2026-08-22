@@ -744,6 +744,208 @@ describe("Variant management", () => {
       error: "Schedule not found"
     });
   });
+  it("retries a failed schedule", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Retry Schedule"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Retry content",
+        status: "APPROVED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(
+          Date.now() + 60 * 60 * 1000
+        ).toISOString(),
+        idempotencyKey: "retry-schedule-001"
+      });
+
+    await prisma.schedule.update({
+      where: {
+        id: schedule.body.id
+      },
+      data: {
+        status: "FAILED"
+      }
+    });
+
+    await prisma.publishAttempt.create({
+      data: {
+        scheduleId: schedule.body.id,
+        variantId: variant.body.id,
+        platform: "x",
+        idempotencyKey: "retry-schedule-001",
+        status: "FAILED",
+        attemptNumber: 1,
+        error: "Temporary publishing failure"
+      }
+    });
+
+    const response = await request(app).post(
+      `/api/schedules/${schedule.body.id}/retry`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(schedule.body.id);
+    expect(response.body.status).toBe("PENDING");
+  });
+
+  it("rejects retrying a published schedule", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Published Retry"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Published content",
+        status: "PUBLISHED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(
+          Date.now() + 60 * 60 * 1000
+        ).toISOString(),
+        idempotencyKey: "retry-published-001"
+      });
+
+    await prisma.schedule.update({
+      where: {
+        id: schedule.body.id
+      },
+      data: {
+        status: "PUBLISHED"
+      }
+    });
+
+    const response = await request(app).post(
+      `/api/schedules/${schedule.body.id}/retry`
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "Cannot retry schedule with status PUBLISHED"
+    });
+  });
+
+  it("rejects retry after maximum publish attempts", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Retry Limit"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Retry limit content",
+        status: "APPROVED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(
+          Date.now() + 60 * 60 * 1000
+        ).toISOString(),
+        idempotencyKey: "retry-limit-001"
+      });
+
+    await prisma.schedule.update({
+      where: {
+        id: schedule.body.id
+      },
+      data: {
+        status: "FAILED"
+      }
+    });
+
+    await prisma.publishAttempt.create({
+      data: {
+        scheduleId: schedule.body.id,
+        variantId: variant.body.id,
+        platform: "x",
+        idempotencyKey: "retry-limit-001",
+        status: "FAILED",
+        attemptNumber: 3,
+        error: "Permanent publishing failure"
+      }
+    });
+
+    const response = await request(app).post(
+      `/api/schedules/${schedule.body.id}/retry`
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "Maximum publish attempts reached",
+      attemptNumber: 3
+    });
+  });
+
+  it("returns 404 when retrying a missing schedule", async () => {
+    const response = await request(app).post(
+      "/api/schedules/non-existent-schedule/retry"
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "Schedule not found"
+    });
+  });
 });
 
 describe("Schedule management", () => {
@@ -1116,6 +1318,7 @@ describe("Schedule management", () => {
         "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED, CANCELLED"
     });
   });});
+
 
 
 

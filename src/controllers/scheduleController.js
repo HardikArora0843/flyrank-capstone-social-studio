@@ -2,10 +2,15 @@ import {
   createScheduleService,
   getSchedulesService,
   getScheduleByIdService,
-  updateScheduleStatusService
+  updateScheduleStatusService,
+  retryScheduleService
 } from "../services/scheduleService.js";
 
 import { validateCreateSchedule } from "../validators/scheduleValidator.js";
+
+import {
+  getPublishAttemptsByScheduleId
+} from "../repositories/publishAttemptRepository.js";
 
 const validStatuses = [
   "PENDING",
@@ -14,6 +19,10 @@ const validStatuses = [
   "FAILED",
   "CANCELLED"
 ];
+
+const MAX_PUBLISH_ATTEMPTS = Number(
+  process.env.MAX_PUBLISH_ATTEMPTS || 3
+);
 
 export const createScheduleController = async (req, res) => {
   const validationError = validateCreateSchedule(req.body);
@@ -117,6 +126,45 @@ export const cancelScheduleController = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       error: "Failed to cancel schedule"
+    });
+  }
+};
+
+export const retryScheduleController = async (req, res) => {
+  try {
+    const schedule = await getScheduleByIdService(req.params.id);
+
+    if (!schedule) {
+      return res.status(404).json({
+        error: "Schedule not found"
+      });
+    }
+
+    if (schedule.status !== "FAILED") {
+      return res.status(409).json({
+        error: `Cannot retry schedule with status ${schedule.status}`
+      });
+    }
+
+    const attempts = await getPublishAttemptsByScheduleId(schedule.id);
+    const latestAttempt = attempts[attempts.length - 1];
+
+    if (
+      latestAttempt &&
+      latestAttempt.attemptNumber >= MAX_PUBLISH_ATTEMPTS
+    ) {
+      return res.status(409).json({
+        error: "Maximum publish attempts reached",
+        attemptNumber: latestAttempt.attemptNumber
+      });
+    }
+
+    const retriedSchedule = await retryScheduleService(schedule.id);
+
+    return res.status(200).json(retriedSchedule);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to retry schedule"
     });
   }
 };
