@@ -577,3 +577,193 @@ describe("Variant management", () => {
     });
   });
 });
+
+describe("Schedule management", () => {
+  beforeEach(async () => {
+    await prisma.publishAttempt.deleteMany();
+    await prisma.schedule.deleteMany();
+    await prisma.variant.deleteMany();
+    await prisma.platform.deleteMany();
+    await prisma.post.deleteMany();
+  });
+
+  const createVariant = async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Scheduled Post\n\nThis post will be scheduled."
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Scheduled LinkedIn content",
+        status: "APPROVED"
+      });
+
+    return variant.body;
+  };
+
+  it("creates a pending schedule", async () => {
+    const variant = await createVariant();
+
+    const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const response = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.id,
+        scheduledFor,
+        idempotencyKey: "schedule-test-001"
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.variantId).toBe(variant.id);
+    expect(response.body.status).toBe("PENDING");
+    expect(response.body.idempotencyKey).toBe("schedule-test-001");
+    expect(response.body.variant.id).toBe(variant.id);
+  });
+
+  it("rejects a schedule without variantId", async () => {
+    const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const response = await request(app)
+      .post("/api/schedules")
+      .send({
+        scheduledFor,
+        idempotencyKey: "schedule-test-002"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "variantId is required"
+    });
+  });
+
+  it("rejects a schedule without scheduledFor", async () => {
+    const variant = await createVariant();
+
+    const response = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.id,
+        idempotencyKey: "schedule-test-003"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "scheduledFor is required"
+    });
+  });
+
+  it("rejects an invalid scheduledFor value", async () => {
+    const variant = await createVariant();
+
+    const response = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.id,
+        scheduledFor: "not-a-date",
+        idempotencyKey: "schedule-test-004"
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "scheduledFor must be a valid date"
+    });
+  });
+
+  it("rejects a schedule without an idempotency key", async () => {
+    const variant = await createVariant();
+
+    const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const response = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.id,
+        scheduledFor
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "idempotencyKey is required"
+    });
+  });
+
+  it("rejects a duplicate idempotency key", async () => {
+    const variant = await createVariant();
+
+    const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const first = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.id,
+        scheduledFor,
+        idempotencyKey: "schedule-duplicate-key"
+      });
+
+    expect(first.status).toBe(201);
+
+    const second = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.id,
+        scheduledFor,
+        idempotencyKey: "schedule-duplicate-key"
+      });
+
+    expect(second.status).toBe(409);
+    expect(second.body).toEqual({
+      error: "idempotencyKey already exists"
+    });
+  });
+
+  it("retrieves a schedule by id", async () => {
+    const variant = await createVariant();
+
+    const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const created = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.id,
+        scheduledFor,
+        idempotencyKey: "schedule-retrieve-001"
+      });
+
+    const response = await request(app).get(
+      `/api/schedules/${created.body.id}`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(created.body.id);
+    expect(response.body.variant.id).toBe(variant.id);
+    expect(response.body.status).toBe("PENDING");
+  });
+
+  it("returns 404 for a missing schedule", async () => {
+    const response = await request(app).get(
+      "/api/schedules/non-existent-schedule"
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "Schedule not found"
+    });
+  });
+});

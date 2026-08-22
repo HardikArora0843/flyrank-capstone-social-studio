@@ -5,6 +5,7 @@ import dotenv from "dotenv";
 import postRoutes from "./routes/postRoutes.js";
 import platformRoutes from "./routes/platformRoutes.js";
 import variantRoutes from "./routes/variantRoutes.js";
+import scheduleRoutes from "./routes/scheduleRoutes.js";
 
 dotenv.config();
 
@@ -23,6 +24,7 @@ app.get("/", (req, res) => {
 app.use("/api/posts", postRoutes);
 app.use("/api/platforms", platformRoutes);
 app.use("/api/variants", variantRoutes);
+app.use("/api/schedules", scheduleRoutes);
 
 const PORT = process.env.PORT || 3000;
 
