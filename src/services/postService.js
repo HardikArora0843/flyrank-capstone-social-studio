@@ -4,8 +4,16 @@ import {
   getPostById
 } from "../repositories/postRepository.js";
 
+import {
+  generateVariantsForPost
+} from "./variantGenerationService.js";
+
 export const createPostService = async (data) => {
-  return createPost(data);
+  const post = await createPost(data);
+
+  await generateVariantsForPost(post);
+
+  return post;
 };
 
 export const getPostsService = async () => {

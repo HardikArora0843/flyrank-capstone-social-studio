@@ -22,8 +22,13 @@ export const createSchedule = async ({
   });
 };
 
-export const getSchedules = async () => {
+export const getSchedules = async (status) => {
   return prisma.schedule.findMany({
+    where: status
+      ? {
+          status
+        }
+      : undefined,
     orderBy: {
       scheduledFor: "asc"
     },

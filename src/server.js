@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import postRoutes from "./routes/postRoutes.js";
@@ -6,6 +6,7 @@ import platformRoutes from "./routes/platformRoutes.js";
 import variantRoutes from "./routes/variantRoutes.js";
 import scheduleRoutes from "./routes/scheduleRoutes.js";
 import metricsRoutes from "./routes/metricsRoutes.js";
+import { startScheduler } from "./scheduler/scheduler.js";
 
 dotenv.config();
 
@@ -32,6 +33,8 @@ const PORT = process.env.PORT || 3000;
 if (process.env.NODE_ENV !== "test") {
   app.listen(PORT, () => {
     console.log(`Social Media Studio API running on port ${PORT}`);
+    startScheduler();
+    console.log("Publishing scheduler started");
   });
 }
 

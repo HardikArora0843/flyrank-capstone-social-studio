@@ -41,6 +41,68 @@ describe("Post ingestion", () => {
     expect(response.body.id).toBeDefined();
   });
 
+  it("generates platform-specific variants when a post is created", async () => {
+    await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const response = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content:
+          "# Product Launch\n\nWe are excited to announce our new product. Learn more at https://example.com."
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.id).toBeDefined();
+
+    const variants = await prisma.variant.findMany({
+      where: {
+        postId: response.body.id
+      },
+      include: {
+        platform: true
+      },
+      orderBy: {
+        platform: {
+          name: "asc"
+        }
+      }
+    });
+
+    expect(variants).toHaveLength(2);
+
+    expect(variants.map((variant) => variant.platform.name)).toEqual([
+      "LinkedIn",
+      "X"
+    ]);
+
+    for (const variant of variants) {
+      expect(variant.postId).toBe(response.body.id);
+      expect(variant.content).toBeTruthy();
+      expect(variant.status).toBe("DRAFT");
+      expect(variant.content.length).toBeLessThanOrEqual(
+        variant.platform.maxLength
+      );
+    }
+  });
   it("creates a URL post", async () => {
     const response = await request(app)
       .post("/api/posts")
@@ -1541,6 +1603,7 @@ describe("Schedule management", () => {
         "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED, CANCELLED"
     });
   });});
+
 
 
 
