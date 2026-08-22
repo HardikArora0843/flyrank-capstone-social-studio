@@ -3,6 +3,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 
 import postRoutes from "./routes/postRoutes.js";
+import platformRoutes from "./routes/platformRoutes.js";
 
 dotenv.config();
 
@@ -19,6 +20,7 @@ app.get("/", (req, res) => {
 });
 
 app.use("/api/posts", postRoutes);
+app.use("/api/platforms", platformRoutes);
 
 const PORT = process.env.PORT || 3000;
 

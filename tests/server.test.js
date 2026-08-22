@@ -146,3 +146,143 @@ describe("Post ingestion", () => {
     });
   });
 });
+
+describe("Platform configuration", () => {
+  beforeEach(async () => {
+    await prisma.publishAttempt.deleteMany();
+    await prisma.schedule.deleteMany();
+    await prisma.variant.deleteMany();
+    await prisma.platform.deleteMany();
+    await prisma.post.deleteMany();
+  });
+
+  it("creates a platform", async () => {
+    const response = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.name).toBe("LinkedIn");
+    expect(response.body.adapterKey).toBe("linkedin");
+    expect(response.body.maxLength).toBe(3000);
+    expect(response.body.tone).toBe("professional");
+    expect(response.body.maxHashtags).toBe(5);
+    expect(response.body.id).toBeDefined();
+  });
+
+  it("rejects a platform without a name", async () => {
+    const response = await request(app)
+      .post("/api/platforms")
+      .send({
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "name is required"
+    });
+  });
+
+  it("rejects a platform with an invalid maxLength", async () => {
+    const response = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 0,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "maxLength must be a positive integer"
+    });
+  });
+
+  it("rejects a platform with an invalid maxHashtags", async () => {
+    const response = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: -1
+      });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error: "maxHashtags must be a non-negative integer"
+    });
+  });
+
+  it("retrieves a platform by id", async () => {
+    const created = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const response = await request(app).get(
+      `/api/platforms/${created.body.id}`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(created.body.id);
+    expect(response.body.name).toBe("X");
+  });
+
+  it("returns the configured platforms", async () => {
+    await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const response = await request(app).get("/api/platforms");
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(2);
+    expect(response.body[0].name).toBe("LinkedIn");
+    expect(response.body[1].name).toBe("X");
+  });
+
+  it("returns 404 for a missing platform", async () => {
+    const response = await request(app).get(
+      "/api/platforms/non-existent-platform"
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "Platform not found"
+    });
+  });
+});
