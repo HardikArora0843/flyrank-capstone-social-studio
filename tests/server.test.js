@@ -832,4 +832,120 @@ describe("Schedule management", () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual([]);
   });
-});
+
+
+  it("filters schedules by PENDING status", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Pending Schedule"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Pending content",
+        status: "APPROVED"
+      });
+
+    await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        idempotencyKey: "status-filter-pending"
+      });
+
+    const response = await request(app)
+      .get("/api/schedules")
+      .query({ status: "PENDING" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].status).toBe("PENDING");
+    expect(response.body[0].idempotencyKey).toBe(
+      "status-filter-pending"
+    );
+  });
+
+  it("filters schedules by PUBLISHED status", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Published Schedule"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Published content",
+        status: "PUBLISHED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+        idempotencyKey: "status-filter-published"
+      });
+
+    await prisma.schedule.update({
+      where: {
+        id: schedule.body.id
+      },
+      data: {
+        status: "PUBLISHED"
+      }
+    });
+
+    const response = await request(app)
+      .get("/api/schedules")
+      .query({ status: "PUBLISHED" });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toHaveLength(1);
+    expect(response.body[0].status).toBe("PUBLISHED");
+    expect(response.body[0].idempotencyKey).toBe(
+      "status-filter-published"
+    );
+  });
+
+  it("rejects an invalid schedule status filter", async () => {
+    const response = await request(app)
+      .get("/api/schedules")
+      .query({ status: "INVALID" });
+
+    expect(response.status).toBe(400);
+    expect(response.body).toEqual({
+      error:
+        "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED"
+    });
+  });});
+

@@ -10,8 +10,8 @@ export const createScheduleService = async (data) => {
   return createSchedule(data);
 };
 
-export const getSchedulesService = async () => {
-  return getSchedules();
+export const getSchedulesService = async (status) => {
+  return getSchedules(status);
 };
 
 export const getScheduleByIdService = async (id) => {

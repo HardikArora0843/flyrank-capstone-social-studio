@@ -6,6 +6,13 @@ import {
 
 import { validateCreateSchedule } from "../validators/scheduleValidator.js";
 
+const validStatuses = [
+  "PENDING",
+  "PROCESSING",
+  "PUBLISHED",
+  "FAILED"
+];
+
 export const createScheduleController = async (req, res) => {
   const validationError = validateCreateSchedule(req.body);
 
@@ -45,8 +52,17 @@ export const createScheduleController = async (req, res) => {
 };
 
 export const getSchedulesController = async (req, res) => {
+  const { status } = req.query;
+
+  if (status && !validStatuses.includes(status)) {
+    return res.status(400).json({
+      error:
+        "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED"
+    });
+  }
+
   try {
-    const schedules = await getSchedulesService();
+    const schedules = await getSchedulesService(status);
 
     return res.status(200).json(schedules);
   } catch (error) {
