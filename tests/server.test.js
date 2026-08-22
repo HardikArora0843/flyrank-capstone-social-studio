@@ -576,6 +576,174 @@ describe("Variant management", () => {
       error: "Variant not found"
     });
   });
+  it("cancels a pending schedule", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Cancelled Schedule"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Content that will be cancelled",
+        status: "APPROVED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(
+          Date.now() + 60 * 60 * 1000
+        ).toISOString(),
+        idempotencyKey: "cancel-pending-001"
+      });
+
+    const response = await request(app).patch(
+      `/api/schedules/${schedule.body.id}/cancel`
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(schedule.body.id);
+    expect(response.body.status).toBe("CANCELLED");
+  });
+
+  it("rejects cancellation of a published schedule", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Published Schedule"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Published content",
+        status: "PUBLISHED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(
+          Date.now() + 60 * 60 * 1000
+        ).toISOString(),
+        idempotencyKey: "cancel-published-001"
+      });
+
+    await prisma.schedule.update({
+      where: {
+        id: schedule.body.id
+      },
+      data: {
+        status: "PUBLISHED"
+      }
+    });
+
+    const response = await request(app).patch(
+      `/api/schedules/${schedule.body.id}/cancel`
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "Cannot cancel schedule with status PUBLISHED"
+    });
+  });
+
+  it("rejects cancellation of an already cancelled schedule", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Already Cancelled"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Already cancelled content",
+        status: "APPROVED"
+      });
+
+    const schedule = await request(app)
+      .post("/api/schedules")
+      .send({
+        variantId: variant.body.id,
+        scheduledFor: new Date(
+          Date.now() + 60 * 60 * 1000
+        ).toISOString(),
+        idempotencyKey: "cancel-again-001"
+      });
+
+    await prisma.schedule.update({
+      where: {
+        id: schedule.body.id
+      },
+      data: {
+        status: "CANCELLED"
+      }
+    });
+
+    const response = await request(app).patch(
+      `/api/schedules/${schedule.body.id}/cancel`
+    );
+
+    expect(response.status).toBe(409);
+    expect(response.body).toEqual({
+      error: "Cannot cancel schedule with status CANCELLED"
+    });
+  });
+
+  it("returns 404 when cancelling a missing schedule", async () => {
+    const response = await request(app).patch(
+      "/api/schedules/non-existent-schedule/cancel"
+    );
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      error: "Schedule not found"
+    });
+  });
 });
 
 describe("Schedule management", () => {
@@ -945,7 +1113,10 @@ describe("Schedule management", () => {
     expect(response.status).toBe(400);
     expect(response.body).toEqual({
       error:
-        "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED"
+        "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED, CANCELLED"
     });
   });});
+
+
+
 

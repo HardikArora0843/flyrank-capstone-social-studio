@@ -18,6 +18,7 @@ enum ScheduleStatus {
   PROCESSING
   PUBLISHED
   FAILED
+  CANCELLED
 }
 
 enum PublishAttemptStatus {

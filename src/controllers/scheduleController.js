@@ -1,7 +1,8 @@
 import {
   createScheduleService,
   getSchedulesService,
-  getScheduleByIdService
+  getScheduleByIdService,
+  updateScheduleStatusService
 } from "../services/scheduleService.js";
 
 import { validateCreateSchedule } from "../validators/scheduleValidator.js";
@@ -10,7 +11,8 @@ const validStatuses = [
   "PENDING",
   "PROCESSING",
   "PUBLISHED",
-  "FAILED"
+  "FAILED",
+  "CANCELLED"
 ];
 
 export const createScheduleController = async (req, res) => {
@@ -57,7 +59,7 @@ export const getSchedulesController = async (req, res) => {
   if (status && !validStatuses.includes(status)) {
     return res.status(400).json({
       error:
-        "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED"
+        "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED, CANCELLED"
     });
   }
 
@@ -86,6 +88,35 @@ export const getScheduleByIdController = async (req, res) => {
   } catch (error) {
     return res.status(500).json({
       error: "Failed to fetch schedule"
+    });
+  }
+};
+
+export const cancelScheduleController = async (req, res) => {
+  try {
+    const schedule = await getScheduleByIdService(req.params.id);
+
+    if (!schedule) {
+      return res.status(404).json({
+        error: "Schedule not found"
+      });
+    }
+
+    if (schedule.status !== "PENDING") {
+      return res.status(409).json({
+        error: `Cannot cancel schedule with status ${schedule.status}`
+      });
+    }
+
+    const cancelledSchedule = await updateScheduleStatusService(
+      schedule.id,
+      "CANCELLED"
+    );
+
+    return res.status(200).json(cancelledSchedule);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to cancel schedule"
     });
   }
 };
