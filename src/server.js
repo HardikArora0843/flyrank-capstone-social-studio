@@ -2,6 +2,8 @@ import express from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 
+import postRoutes from "./routes/postRoutes.js";
+
 dotenv.config();
 
 const app = express();
@@ -15,6 +17,8 @@ app.get("/", (req, res) => {
     status: "running"
   });
 });
+
+app.use("/api/posts", postRoutes);
 
 const PORT = process.env.PORT || 3000;
 
