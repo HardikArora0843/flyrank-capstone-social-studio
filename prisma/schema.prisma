@@ -1,0 +1,102 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+enum VariantStatus {
+  DRAFT
+  APPROVED
+  REJECTED
+  PUBLISHED
+}
+
+enum ScheduleStatus {
+  PENDING
+  PROCESSING
+  PUBLISHED
+  FAILED
+}
+
+enum PublishAttemptStatus {
+  STARTED
+  SUCCESS
+  FAILED
+  SKIPPED
+}
+
+model Post {
+  id         String    @id @default(cuid())
+  sourceType String
+  sourceUrl  String?
+  content    String
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  variants   Variant[]
+}
+
+model Platform {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  adapterKey  String    @unique
+  maxLength   Int
+  tone        String
+  maxHashtags Int
+  variants    Variant[]
+}
+
+model Variant {
+  id              String          @id @default(cuid())
+  postId          String
+  platformId      String
+  content         String
+  status          VariantStatus   @default(DRAFT)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  post            Post            @relation(fields: [postId], references: [id], onDelete: Cascade)
+  platform        Platform        @relation(fields: [platformId], references: [id], onDelete: Restrict)
+  schedules       Schedule[]
+  publishAttempts PublishAttempt[]
+
+  @@index([postId])
+  @@index([platformId])
+  @@index([status])
+}
+
+model Schedule {
+  id              String          @id @default(cuid())
+  variantId       String
+  scheduledFor    DateTime
+  status          ScheduleStatus  @default(PENDING)
+  idempotencyKey  String          @unique
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+  variant         Variant         @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  publishAttempts PublishAttempt[]
+
+  @@index([scheduledFor])
+  @@index([status, scheduledFor])
+}
+
+model PublishAttempt {
+  id                String               @id @default(cuid())
+  scheduleId        String
+  variantId         String
+  platform          String
+  idempotencyKey    String
+  status            PublishAttemptStatus
+  attemptNumber     Int
+  externalMessageId String?
+  error             String?
+  createdAt         DateTime             @default(now())
+  publishedAt       DateTime?
+  schedule          Schedule             @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+  variant           Variant              @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@index([scheduleId])
+  @@index([variantId])
+  @@index([idempotencyKey])
+}
