@@ -1,5 +1,6 @@
 import {
   getDueSchedulesService,
+  claimPendingScheduleService,
   updateScheduleStatusService
 } from "../services/scheduleService.js";
 
@@ -31,6 +32,18 @@ export const processSchedule = async (schedule) => {
     };
   }
 
+  if (schedule.status === "PENDING") {
+    const claim = await claimPendingScheduleService(schedule.id);
+
+    if (claim.count === 0) {
+      return {
+        status: "SKIPPED",
+        reason: "Schedule was already claimed",
+        scheduleId: schedule.id
+      };
+    }
+  }
+
   const attemptNumber = existingAttempt
     ? existingAttempt.attemptNumber + 1
     : 1;
@@ -47,15 +60,14 @@ export const processSchedule = async (schedule) => {
     };
   }
 
-  await updateScheduleStatusService(schedule.id, "PROCESSING");
-
   const attempt = await createPublishAttempt({
     scheduleId: schedule.id,
     variantId: schedule.variantId,
     platform: schedule.variant.platform.adapterKey,
     idempotencyKey: schedule.idempotencyKey,
     status: "STARTED",
-    attemptNumber
+    attemptNumber,
+    content: schedule.variant.content
   });
 
   try {
@@ -68,6 +80,8 @@ export const processSchedule = async (schedule) => {
     await updatePublishAttempt(attempt.id, {
       status: "SUCCESS",
       externalMessageId: result.externalMessageId,
+      content: result.content,
+      preview: result.preview,
       publishedAt: result.publishedAt
     });
 

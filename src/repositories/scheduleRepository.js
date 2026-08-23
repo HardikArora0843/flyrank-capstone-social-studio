@@ -62,7 +62,9 @@ export const getScheduleById = async (id) => {
 export const getDueSchedules = async (now) => {
   return prisma.schedule.findMany({
     where: {
-      status: "PENDING",
+      status: {
+        in: ["PENDING", "PROCESSING"]
+      },
       scheduledFor: {
         lte: now
       }
@@ -77,6 +79,18 @@ export const getDueSchedules = async (now) => {
           platform: true
         }
       }
+    }
+  });
+};
+
+export const claimPendingSchedule = async (id) => {
+  return prisma.schedule.updateMany({
+    where: {
+      id,
+      status: "PENDING"
+    },
+    data: {
+      status: "PROCESSING"
     }
   });
 };

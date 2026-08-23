@@ -1,4 +1,4 @@
-const allowedStatuses = [
+﻿const allowedStatuses = [
   "DRAFT",
   "APPROVED",
   "REJECTED",
@@ -27,6 +27,14 @@ export const validateCreateVariant = (body) => {
 
   if (status !== undefined && !allowedStatuses.includes(status)) {
     return "status must be one of DRAFT, APPROVED, REJECTED, PUBLISHED";
+  }
+
+  return null;
+};
+
+export const validateUpdateVariant = (body) => {
+  if (!body || typeof body.content !== "string" || !body.content.trim()) {
+    return "content is required";
   }
 
   return null;

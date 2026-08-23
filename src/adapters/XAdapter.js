@@ -7,6 +7,7 @@ export class XAdapter extends PublisherAdapter {
       adapterKey: this.platform.adapterKey,
       externalMessageId: `mock-x-${idempotencyKey}`,
       content,
+      preview: `[Mock X] ${content}`,
       publishedAt: new Date()
     };
   }

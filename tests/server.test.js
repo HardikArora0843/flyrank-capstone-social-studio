@@ -638,6 +638,186 @@ describe("Variant management", () => {
       error: "Variant not found"
     });
   });
+
+  it("edits a variant and resets its status to DRAFT", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Editable Post"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Original draft content",
+        status: "APPROVED"
+      });
+
+    const response = await request(app)
+      .patch(`/api/variants/${variant.body.id}`)
+      .send({
+        content: "Updated professional content for review"
+      });
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(variant.body.id);
+    expect(response.body.content).toBe("Updated professional content for review");
+    expect(response.body.status).toBe("DRAFT");
+  });
+
+  it("approves a DRAFT variant", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Approvable Post"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "High quality professional post"
+      });
+
+    const response = await request(app)
+      .post(`/api/variants/${variant.body.id}/approve`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(variant.body.id);
+    expect(response.body.status).toBe("APPROVED");
+  });
+
+  it("rejects a variant", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Rejectable Post"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Short post"
+      });
+
+    const response = await request(app)
+      .post(`/api/variants/${variant.body.id}/reject`);
+
+    expect(response.status).toBe(200);
+    expect(response.body.id).toBe(variant.body.id);
+    expect(response.body.status).toBe("REJECTED");
+  });
+
+  it("allows generating variants via POST /api/posts/:id/variants", async () => {
+    await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "LinkedIn",
+        adapterKey: "linkedin",
+        maxLength: 3000,
+        tone: "professional",
+        maxHashtags: 5
+      });
+
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Regeneration Test"
+      });
+
+    const response = await request(app)
+      .post(`/api/posts/${post.body.id}/variants`);
+
+    expect(response.status).toBe(201);
+    expect(Array.isArray(response.body)).toBe(true);
+    expect(response.body.length).toBeGreaterThanOrEqual(1);
+
+    const getVariants = await request(app)
+      .get(`/api/posts/${post.body.id}/variants`);
+
+    expect(getVariants.status).toBe(200);
+    expect(Array.isArray(getVariants.body)).toBe(true);
+  });
+
+  it("allows scheduling via POST /api/variants/:id/schedule", async () => {
+    const post = await request(app)
+      .post("/api/posts")
+      .send({
+        sourceType: "markdown",
+        content: "# Variant Route Scheduling"
+      });
+
+    const platform = await request(app)
+      .post("/api/platforms")
+      .send({
+        name: "X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      });
+
+    const variant = await request(app)
+      .post("/api/variants")
+      .send({
+        postId: post.body.id,
+        platformId: platform.body.id,
+        content: "Approved tweet",
+        status: "APPROVED"
+      });
+
+    const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+
+    const response = await request(app)
+      .post(`/api/variants/${variant.body.id}/schedule`)
+      .send({
+        scheduledFor,
+        idempotencyKey: "schedule-variant-route-001"
+      });
+
+    expect(response.status).toBe(201);
+    expect(response.body.variantId).toBe(variant.body.id);
+    expect(response.body.status).toBe("PENDING");
+  });
   it("cancels a pending schedule", async () => {
     const post = await request(app)
       .post("/api/posts")
@@ -708,7 +888,7 @@ describe("Variant management", () => {
         postId: post.body.id,
         platformId: platform.body.id,
         content: "Published content",
-        status: "PUBLISHED"
+        status: "APPROVED"
       });
 
     const schedule = await request(app)
@@ -897,7 +1077,7 @@ describe("Variant management", () => {
         postId: post.body.id,
         platformId: platform.body.id,
         content: "Published content",
-        status: "PUBLISHED"
+        status: "APPROVED"
       });
 
     const schedule = await request(app)
@@ -1091,6 +1271,73 @@ describe("Variant management", () => {
       error: "Schedule not found"
     });
   });
+
+  it("returns visible publish history with previews", async () => {
+    const post = await prisma.post.create({
+      data: {
+        sourceType: "markdown",
+        content: "# Visible History"
+      }
+    });
+
+    const platform = await prisma.platform.create({
+      data: {
+        name: "History X",
+        adapterKey: "x",
+        maxLength: 280,
+        tone: "concise",
+        maxHashtags: 3
+      }
+    });
+
+    const variant = await prisma.variant.create({
+      data: {
+        postId: post.id,
+        platformId: platform.id,
+        content: "History content",
+        status: "PUBLISHED"
+      }
+    });
+
+    const schedule = await prisma.schedule.create({
+      data: {
+        variantId: variant.id,
+        scheduledFor: new Date(Date.now() - 60 * 1000),
+        status: "PUBLISHED",
+        idempotencyKey: "history-visible-001"
+      }
+    });
+
+    const attempt = await prisma.publishAttempt.create({
+      data: {
+        scheduleId: schedule.id,
+        variantId: variant.id,
+        platform: "x",
+        idempotencyKey: "history-visible-001",
+        status: "SUCCESS",
+        attemptNumber: 1,
+        externalMessageId: "mock-x-history-visible-001",
+        content: "History content",
+        preview: "[Mock X] History content",
+        publishedAt: new Date()
+      }
+    });
+
+    const list = await request(app).get("/api/publish-history");
+
+    expect(list.status).toBe(200);
+    expect(list.body).toHaveLength(1);
+    expect(list.body[0].id).toBe(attempt.id);
+    expect(list.body[0].preview).toBe("[Mock X] History content");
+
+    const detail = await request(app).get(
+      `/api/publish-history/${attempt.id}`
+    );
+
+    expect(detail.status).toBe(200);
+    expect(detail.body.id).toBe(attempt.id);
+  });
+
   it("returns publishing metrics", async () => {
     const response = await request(app)
       .get("/api/metrics/publishing");
@@ -1272,7 +1519,98 @@ describe("Schedule management", () => {
     return variant.body;
   };
 
-  it("creates a pending schedule", async () => {
+  it("rejects scheduling a DRAFT variant", async () => {
+  const post = await request(app)
+    .post("/api/posts")
+    .send({
+      sourceType: "markdown",
+      content: "# Draft Scheduled Post\n\nThis variant is not approved."
+    });
+
+  const platform = await request(app)
+    .post("/api/platforms")
+    .send({
+      name: "Draft Schedule Platform",
+      adapterKey: "draft-schedule-platform",
+      maxLength: 3000,
+      tone: "professional",
+      maxHashtags: 5
+    });
+
+  const variant = await request(app)
+    .post("/api/variants")
+    .send({
+      postId: post.body.id,
+      platformId: platform.body.id,
+      content: "Draft content that must not be scheduled"
+    });
+
+  expect(variant.status).toBe(201);
+  expect(variant.body.status).toBe("DRAFT");
+
+  const response = await request(app)
+    .post("/api/schedules")
+    .send({
+      variantId: variant.body.id,
+      scheduledFor: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      idempotencyKey: "schedule-draft-rejected-001"
+    });
+
+  expect(response.status).toBe(409);
+  expect(response.body).toEqual({
+    error: "Only APPROVED variants can be scheduled. Current status: DRAFT"
+  });
+});
+
+it("rejects scheduling a REJECTED variant", async () => {
+  const post = await request(app)
+    .post("/api/posts")
+    .send({
+      sourceType: "markdown",
+      content: "# Rejected Scheduled Post\n\nThis variant was rejected."
+    });
+
+  const platform = await request(app)
+    .post("/api/platforms")
+    .send({
+      name: "Rejected Schedule Platform",
+      adapterKey: "rejected-schedule-platform",
+      maxLength: 3000,
+      tone: "professional",
+      maxHashtags: 5
+    });
+
+  const variant = await request(app)
+    .post("/api/variants")
+    .send({
+      postId: post.body.id,
+      platformId: platform.body.id,
+      content: "Rejected content that must not be scheduled"
+    });
+
+  expect(variant.status).toBe(201);
+  expect(variant.body.status).toBe("DRAFT");
+
+  const rejected = await request(app)
+    .post(`/api/variants/${variant.body.id}/reject`);
+
+  expect(rejected.status).toBe(200);
+  expect(rejected.body.status).toBe("REJECTED");
+
+  const response = await request(app)
+    .post("/api/schedules")
+    .send({
+      variantId: variant.body.id,
+      scheduledFor: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+      idempotencyKey: "schedule-rejected-001"
+    });
+
+  expect(response.status).toBe(409);
+  expect(response.body).toEqual({
+    error: "Only APPROVED variants can be scheduled. Current status: REJECTED"
+  });
+});
+it("creates a pending schedule", async () => {
     const variant = await createVariant();
 
     const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -1341,7 +1679,7 @@ describe("Schedule management", () => {
     });
   });
 
-  it("rejects a schedule without an idempotency key", async () => {
+  it("generates a schedule idempotency key when one is not supplied", async () => {
     const variant = await createVariant();
 
     const scheduledFor = new Date(Date.now() + 60 * 60 * 1000).toISOString();
@@ -1353,10 +1691,10 @@ describe("Schedule management", () => {
         scheduledFor
       });
 
-    expect(response.status).toBe(400);
-    expect(response.body).toEqual({
-      error: "idempotencyKey is required"
-    });
+    expect(response.status).toBe(201);
+    expect(response.body.idempotencyKey).toBe(
+      `variant:${variant.id}:slot:${new Date(scheduledFor).toISOString()}`
+    );
   });
 
   it("rejects a duplicate idempotency key", async () => {
@@ -1384,7 +1722,8 @@ describe("Schedule management", () => {
 
     expect(second.status).toBe(409);
     expect(second.body).toEqual({
-      error: "idempotencyKey already exists"
+      error:
+        "A schedule already exists for this idempotency key or variant slot"
     });
   });
 
@@ -1560,7 +1899,7 @@ describe("Schedule management", () => {
         postId: post.body.id,
         platformId: platform.body.id,
         content: "Published content",
-        status: "PUBLISHED"
+        status: "APPROVED"
       });
 
     const schedule = await request(app)
@@ -1603,6 +1942,8 @@ describe("Schedule management", () => {
         "status must be one of PENDING, PROCESSING, PUBLISHED, FAILED, CANCELLED"
     });
   });});
+
+
 
 
 

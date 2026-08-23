@@ -1,8 +1,7 @@
 export const validateCreateSchedule = (body) => {
   const {
     variantId,
-    scheduledFor,
-    idempotencyKey
+    scheduledFor
   } = body;
 
   if (!variantId) {
@@ -17,10 +16,6 @@ export const validateCreateSchedule = (body) => {
 
   if (Number.isNaN(scheduledDate.getTime())) {
     return "scheduledFor must be a valid date";
-  }
-
-  if (!idempotencyKey) {
-    return "idempotencyKey is required";
   }
 
   return null;

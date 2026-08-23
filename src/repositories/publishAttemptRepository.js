@@ -6,7 +6,9 @@ export const createPublishAttempt = async ({
   platform,
   idempotencyKey,
   status,
-  attemptNumber
+  attemptNumber,
+  content,
+  preview
 }) => {
   return prisma.publishAttempt.create({
     data: {
@@ -15,7 +17,9 @@ export const createPublishAttempt = async ({
       platform,
       idempotencyKey,
       status,
-      attemptNumber
+      attemptNumber,
+      content,
+      preview
     }
   });
 };
@@ -40,6 +44,40 @@ export const getPublishAttemptsByScheduleId = async (scheduleId) => {
     },
     orderBy: {
       attemptNumber: "asc"
+    }
+  });
+};
+
+export const getPublishAttempts = async () => {
+  return prisma.publishAttempt.findMany({
+    orderBy: {
+      createdAt: "desc"
+    },
+    include: {
+      schedule: true,
+      variant: {
+        include: {
+          platform: true,
+          post: true
+        }
+      }
+    }
+  });
+};
+
+export const getPublishAttemptById = async (id) => {
+  return prisma.publishAttempt.findUnique({
+    where: {
+      id
+    },
+    include: {
+      schedule: true,
+      variant: {
+        include: {
+          platform: true,
+          post: true
+        }
+      }
     }
   });
 };

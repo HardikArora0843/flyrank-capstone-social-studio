@@ -55,3 +55,49 @@ export const getPostByIdController = async (req, res) => {
     });
   }
 };
+
+export const generatePostVariantsController = async (req, res) => {
+  try {
+    const post = await getPostByIdService(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        error: "Post not found"
+      });
+    }
+
+    const { generateVariantsForPost } = await import(
+      "../services/variantGenerationService.js"
+    );
+    const variants = await generateVariantsForPost(post);
+
+    return res.status(201).json(variants);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to generate variants for post"
+    });
+  }
+};
+
+export const getPostVariantsController = async (req, res) => {
+  try {
+    const post = await getPostByIdService(req.params.id);
+
+    if (!post) {
+      return res.status(404).json({
+        error: "Post not found"
+      });
+    }
+
+    const { getVariantsByPostIdService } = await import(
+      "../services/variantService.js"
+    );
+    const variants = await getVariantsByPostIdService(req.params.id);
+
+    return res.status(200).json(variants);
+  } catch (error) {
+    return res.status(500).json({
+      error: "Failed to fetch variants for post"
+    });
+  }
+};

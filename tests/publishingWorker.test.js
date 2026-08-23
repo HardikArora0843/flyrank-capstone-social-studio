@@ -103,6 +103,10 @@ describe("Publishing worker", () => {
     expect(attempts[0].externalMessageId).toBe(
       `mock-x-${schedule.idempotencyKey}`
     );
+    expect(attempts[0].content).toBe("Test scheduled content");
+    expect(attempts[0].preview).toBe(
+      "[Mock X] Test scheduled content"
+    );
   });
 
   it("processes due schedules", async () => {
@@ -196,6 +200,78 @@ describe("Publishing worker", () => {
     const attempts = await prisma.publishAttempt.findMany({
       where: {
         scheduleId: schedule.id
+      }
+    });
+
+    expect(attempts).toHaveLength(1);
+  });
+
+  it("recovers a processing schedule after a worker restart", async () => {
+    const schedule = await createDueSchedule({
+      idempotencyKey: "worker-restart-001"
+    });
+
+    await prisma.schedule.update({
+      where: {
+        id: schedule.id
+      },
+      data: {
+        status: "PROCESSING"
+      }
+    });
+
+    await prisma.publishAttempt.create({
+      data: {
+        scheduleId: schedule.id,
+        variantId: schedule.variantId,
+        platform: "x",
+        idempotencyKey: "worker-restart-001",
+        status: "STARTED",
+        attemptNumber: 1,
+        content: schedule.variant.content
+      }
+    });
+
+    const results = await processDueSchedules(new Date());
+
+    expect(results).toHaveLength(1);
+    expect(results[0].status).toBe("PUBLISHED");
+
+    const attempts = await prisma.publishAttempt.findMany({
+      where: {
+        scheduleId: schedule.id
+      },
+      orderBy: {
+        attemptNumber: "asc"
+      }
+    });
+
+    expect(attempts).toHaveLength(2);
+    expect(attempts[0].status).toBe("STARTED");
+    expect(attempts[1].status).toBe("SUCCESS");
+    expect(attempts[1].externalMessageId).toBe(
+      "mock-x-worker-restart-001"
+    );
+  });
+
+  it("does not publish twice when the same pending schedule is processed concurrently", async () => {
+    const schedule = await createDueSchedule({
+      idempotencyKey: "worker-concurrent-001"
+    });
+
+    const results = await Promise.all([
+      processSchedule(schedule),
+      processSchedule(schedule)
+    ]);
+
+    expect(
+      results.filter((result) => result.status === "PUBLISHED")
+    ).toHaveLength(1);
+
+    const attempts = await prisma.publishAttempt.findMany({
+      where: {
+        scheduleId: schedule.id,
+        status: "SUCCESS"
       }
     });
 

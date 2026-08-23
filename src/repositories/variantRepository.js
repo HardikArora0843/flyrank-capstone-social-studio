@@ -1,4 +1,4 @@
-import prisma from "../config/database.js";
+﻿import prisma from "../config/database.js";
 
 export const createVariant = async ({
   postId,
@@ -39,6 +39,19 @@ export const getVariantById = async (id) => {
     where: {
       id
     },
+    include: {
+      post: true,
+      platform: true
+    }
+  });
+};
+
+export const updateVariant = async (id, data) => {
+  return prisma.variant.update({
+    where: {
+      id
+    },
+    data,
     include: {
       post: true,
       platform: true

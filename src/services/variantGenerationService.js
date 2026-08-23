@@ -15,8 +15,12 @@ const buildBaseContent = (post) => {
     return post.content?.trim() ?? "";
   }
 
+  if (post.content?.trim()) {
+    return post.content.trim();
+  }
+
   if (post.sourceType === "url") {
-    return `New blog post: ${post.sourceUrl}`;
+    return `Source URL: ${post.sourceUrl}`;
   }
 
   return "";

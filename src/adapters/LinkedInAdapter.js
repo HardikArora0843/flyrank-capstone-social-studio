@@ -7,6 +7,7 @@ export class LinkedInAdapter extends PublisherAdapter {
       adapterKey: this.platform.adapterKey,
       externalMessageId: `mock-linkedin-${idempotencyKey}`,
       content,
+      preview: `[Mock LinkedIn] ${content}`,
       publishedAt: new Date()
     };
   }

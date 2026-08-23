@@ -6,6 +6,7 @@ import platformRoutes from "./routes/platformRoutes.js";
 import variantRoutes from "./routes/variantRoutes.js";
 import scheduleRoutes from "./routes/scheduleRoutes.js";
 import metricsRoutes from "./routes/metricsRoutes.js";
+import publishHistoryRoutes from "./routes/publishHistoryRoutes.js";
 import { startScheduler } from "./scheduler/scheduler.js";
 
 dotenv.config();
@@ -27,6 +28,7 @@ app.use("/api/platforms", platformRoutes);
 app.use("/api/variants", variantRoutes);
 app.use("/api/schedules", scheduleRoutes);
 app.use("/api/metrics", metricsRoutes);
+app.use("/api/publish-history", publishHistoryRoutes);
 
 const PORT = process.env.PORT || 3000;
 

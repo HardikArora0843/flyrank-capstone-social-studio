@@ -3,6 +3,7 @@ import {
   getSchedules,
   getScheduleById,
   getDueSchedules,
+  claimPendingSchedule,
   updateScheduleStatus
 } from "../repositories/scheduleRepository.js";
 
@@ -20,6 +21,10 @@ export const getScheduleByIdService = async (id) => {
 
 export const getDueSchedulesService = async (now) => {
   return getDueSchedules(now);
+};
+
+export const claimPendingScheduleService = async (id) => {
+  return claimPendingSchedule(id);
 };
 
 export const updateScheduleStatusService = async (id, status) => {

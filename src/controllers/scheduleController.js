@@ -6,7 +6,13 @@
   retryScheduleService
 } from "../services/scheduleService.js";
 
-import { validateCreateSchedule } from "../validators/scheduleValidator.js";
+import {
+  getVariantByIdService
+} from "../services/variantService.js";
+
+import {
+  validateCreateSchedule
+} from "../validators/scheduleValidator.js";
 
 import {
   getPublishAttemptsByScheduleId
@@ -24,6 +30,10 @@ const MAX_PUBLISH_ATTEMPTS = Number(
   process.env.MAX_PUBLISH_ATTEMPTS || 3
 );
 
+const buildScheduleIdempotencyKey = ({ variantId, scheduledFor }) => {
+  return `variant:${variantId}:slot:${scheduledFor.toISOString()}`;
+};
+
 export const createScheduleController = async (req, res) => {
   const validationError = validateCreateSchedule(req.body);
 
@@ -34,27 +44,43 @@ export const createScheduleController = async (req, res) => {
   }
 
   try {
-    const existing = await getSchedulesService();
+    const variant = await getVariantByIdService(req.body.variantId);
 
-    const duplicate = existing.find(
-      (schedule) =>
-        schedule.idempotencyKey === req.body.idempotencyKey
-    );
-
-    if (duplicate) {
-      return res.status(409).json({
-        error: "idempotencyKey already exists"
+    if (!variant) {
+      return res.status(404).json({
+        error: "Variant not found"
       });
     }
 
+    if (variant.status !== "APPROVED") {
+      return res.status(409).json({
+        error: `Only APPROVED variants can be scheduled. Current status: ${variant.status}`
+      });
+    }
+
+    const scheduledFor = new Date(req.body.scheduledFor);
+    const idempotencyKey =
+      req.body.idempotencyKey ||
+      buildScheduleIdempotencyKey({
+        variantId: req.body.variantId,
+        scheduledFor
+      });
+
     const schedule = await createScheduleService({
       variantId: req.body.variantId,
-      scheduledFor: new Date(req.body.scheduledFor),
-      idempotencyKey: req.body.idempotencyKey
+      scheduledFor,
+      idempotencyKey
     });
 
     return res.status(201).json(schedule);
   } catch (error) {
+    if (error.code === "P2002") {
+      return res.status(409).json({
+        error:
+          "A schedule already exists for this idempotency key or variant slot"
+      });
+    }
+
     return res.status(500).json({
       error: "Failed to create schedule",
       details: error.message

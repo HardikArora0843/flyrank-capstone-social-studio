@@ -8,11 +8,17 @@ const applyTone = (content, tone) => {
   if (normalizedTone === "concise") {
     return content
       .replace(/\s+/g, " ")
+      .split(/(?<=[.!?])\s+/)
+      .slice(0, 3)
+      .join(" ")
       .trim();
   }
 
   if (normalizedTone === "professional") {
     return content
+      .replace(/\b(lol|omg|btw)\b/gi, "")
+      .replace(/\b(u|ur)\b/gi, "you")
+      .replace(/!{2,}/g, ".")
       .replace(/\s+/g, " ")
       .trim();
   }
@@ -24,6 +30,34 @@ const applyTone = (content, tone) => {
   }
 
   return content.trim();
+};
+
+const validateTone = (content, tone) => {
+  const normalizedTone = tone.trim().toLowerCase();
+  const errors = [];
+
+  if (normalizedTone === "professional") {
+    const casualTerms = /\b(lol|omg|btw|u|ur)\b/i;
+
+    if (casualTerms.test(content) || /!{2,}/.test(content)) {
+      errors.push(
+        "content does not match professional tone"
+      );
+    }
+  }
+
+  if (normalizedTone === "concise") {
+    const sentenceCount = content
+      .split(/[.!?]+/)
+      .filter((sentence) => sentence.trim().length > 0)
+      .length;
+
+    if (sentenceCount > 3) {
+      errors.push("content does not match concise tone");
+    }
+  }
+
+  return errors;
 };
 
 export const enforcePlatformConstraints = ({
@@ -88,6 +122,8 @@ export const validatePlatformConstraints = ({
       `content exceeds maximum hashtag count of ${platform.maxHashtags}`
     );
   }
+
+  errors.push(...validateTone(content, platform.tone));
 
   return errors;
 };

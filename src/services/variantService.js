@@ -1,7 +1,8 @@
-import {
+﻿import {
   createVariant,
   getVariantsByPostId,
-  getVariantById
+  getVariantById,
+  updateVariant
 } from "../repositories/variantRepository.js";
 
 export const createVariantService = async (data) => {
@@ -14,4 +15,8 @@ export const getVariantsByPostIdService = async (postId) => {
 
 export const getVariantByIdService = async (id) => {
   return getVariantById(id);
+};
+
+export const updateVariantService = async (id, data) => {
+  return updateVariant(id, data);
 };
